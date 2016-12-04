@@ -5,15 +5,42 @@ import std.bigint;
 import std.parallelism;
 import std.algorithm;
 import std.range;
-
+import std.typecons;
 
 // Euclid algorithm computing greatest common divisor
-BigInt gcd(BigInt a, BigInt b)
+T gcd(T) (T u, T v)
 {
-    if (b == 0)
-        return a;
+  T t, k;
+ 
+  u = u < 0 ? -u : u; /* abs(u) */
+  v = v < 0 ? -v : v; 
+  if (u < v) {
+    t = u;
+    u = v;
+    v = t;
+  }
+  if (v == 0)
+    return u;
+ 
+  k = 1;
+  while (((u & 1) == 0) && ((v & 1) == 0)) { /* u, v - even */
+    u >>= 1; v >>= 1;
+    k <<= 1;
+  }
+ 
+  t = (u & 1) ? -v : u;
+  while (t) {
+    while ((t & 1) == 0) 
+      t >>= 1;
+ 
+    if (t > 0)
+      u = t;
     else
-        return gcd(b, a % b);
+      v = -t;
+ 
+    t = u - v;
+  }
+  return u * k; 
 }
 
 // http://oeis.org/search?q=6%2C30%2C138%2C606%2C2586&language=english&go=Search
@@ -161,23 +188,31 @@ auto snowflakes_iterative()
     return S;
 }
 
-BigInt blue(int n)
+alias blue = (int n)
 {
     return 6*(2*BigInt(4)^^n - BigInt(3)^^n);
-}
+};
 
-BigInt yellow(int n)
+alias yellow = (int n)
 {
     return 6*(BigInt(4)^^n*(3*n - 17) + BigInt(3)^^n*(2*n + 17));
-}
+};
 
+alias _gcd = (Tuple!(BigInt, BigInt) x)
+{
+    return gcd(x[0], x[1]);
+};
+
+alias _gcd_by = (int n)
+{
+    return gcd(blue(n), yellow(n));
+};
 
 auto snowflakes_functional()
 {
-    auto nums = iota(2, 500);
-    auto sum = std.algorithm.reduce!"a+b"(
-        std.algorithm.map!(x => gcd(x[0], x[1]))
-            (zip(std.algorithm.map!(blue)(nums), std.algorithm.map!(yellow)(nums))));
+    immutable n = iota(2, 1_000);
+    immutable sum = taskPool.reduce!"a+b"(
+        n.map!_gcd_by);
     return sum;
 }
 
