@@ -1,10 +1,12 @@
+module Main where
+import Control.DeepSeq
+import Control.Exception
 import Control.Parallel
 import Control.Parallel.Strategies
-import Control.Exception
 import Data.Time.Clock
-import Text.Printf
+import Data.List
 import System.Environment
-import Control.DeepSeq
+import Text.Printf
 
 
 blue :: Integer -> Integer
@@ -13,34 +15,35 @@ blue n = 6*(2*4^n - 3^n)
 yellow :: Integer -> Integer
 yellow n = 6*(4^n*(3*n - 17) + 3^n*(2*n + 17))
 
+g :: Integer -> Integer
+g n = gcd (blue n) (yellow n)
+
 --
 -- $ ghci snowflakes.hs
 -- Prelude> s(500)
 --
 s :: Integer -> Integer
-s n = sum (zipWith gcd (map blue [0..n]) (map yellow [0..n]))
+s n = sum (map g [0..n])
+
+
+parMapChunked
+  :: Strategy b -- ^ evaluation degree at each element
+  -> Int        -- ^ chunk size
+  -> (a -> b)   -- ^ function to apply to each element
+  -> [a]        -- ^ input list
+  -> [b]
+parMapChunked strat i f =
+    withStrategy (parListChunk i strat) . map f
+
 
 --
 -- $ ghc snowflakes.hs -O2 -threaded -rtsopts
--- $ ./snowflakes +RTS -N4 -s
+-- $ ./snowflakes +RTS -N -s
 --
-pres n = do
-    a <- rpar (force (map blue [0..n]))
-    b <- rpar (force (map yellow [0..n]))
-    rseq a
-    rseq b
-    g <- rpar (zipWith gcd a b)
-    rseq g
-    s <- rpar (sum g)
-    rseq s
-    return (s)
-
-printTimeSince t0 = do
-  t1 <- getCurrentTime
-  printf "time: %.2fs\n" (realToFrac (diffUTCTime t1 t0) :: Double)
 
 main = do
-    t0 <- getCurrentTime
-    r <- evaluate (runEval $ pres (10000000))
-    printTimeSince t0
-    print r
+    let length      = 10^7
+        chunkSize   = 10000
+        newlist     = parMapChunked rseq chunkSize g [0..length]
+        sum         = foldl' (+) 0 newlist
+    print sum
